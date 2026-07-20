@@ -433,6 +433,45 @@ pub(crate) fn card_synergy(snap: &PlayerSnap) -> f64 {
     }
 }
 
+/// Shot synergy: clinical finishers convert more chances.
+///   - composure ≥ 85 && shooting ≥ 80 ⇒ ×1.08 (ice-cold finisher)
+///   - composure ≥ 70 && decisions ≥ 75 ⇒ ×1.04 (picks the right shot)
+pub(crate) fn shot_synergy(snap: &PlayerSnap) -> f64 {
+    if snap.composure >= 85 && snap.shooting >= 80 {
+        1.08
+    } else if snap.composure >= 70 && snap.decisions >= 75 {
+        1.04
+    } else {
+        1.0
+    }
+}
+
+/// Dribble synergy: agile dribblers are harder to dispossess.
+///   - agility ≥ 80 && dribbling ≥ 80 ⇒ ×1.10 (close control)
+///   - agility ≥ 70 && pace ≥ 75  ⇒ ×1.05 (speed dribbler)
+pub(crate) fn dribble_synergy(snap: &PlayerSnap) -> f64 {
+    if snap.agility >= 80 && snap.dribbling >= 80 {
+        1.10
+    } else if snap.agility >= 70 && snap.pace >= 75 {
+        1.05
+    } else {
+        1.0
+    }
+}
+
+/// Goalkeeper synergy: cat-like keepers with quick reflexes save more.
+///   - reflexes ≥ 85 && agility ≥ 75 ⇒ ×1.12 (cat reflexes)
+///   - reflexes ≥ 75 && positioning ≥ 75 ⇒ ×1.06 (well-positioned)
+pub(crate) fn gk_synergy(snap: &PlayerSnap) -> f64 {
+    if snap.reflexes >= 85 && snap.agility >= 75 {
+        1.12
+    } else if snap.reflexes >= 75 && snap.positioning >= 75 {
+        1.06
+    } else {
+        1.0
+    }
+}
+
 pub(crate) fn home_mod(side: Side, config: &MatchConfig) -> f64 {
     match side {
         Side::Home => config.home_advantage,

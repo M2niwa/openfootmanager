@@ -6,6 +6,7 @@ use crate::shared::{
     tactics_buildup_mod, tactics_cross_probability, tactics_defensive_conversion_mod,
     tactics_foul_modifier, tactics_pressing_press, tactics_shape_modifier,
     tactics_tempo_progression, trait_bonus,
+    shot_synergy, dribble_synergy, gk_synergy,
 };
 use crate::types::{Position, Side, Zone};
 
@@ -187,7 +188,7 @@ fn resolve_attacking_third<R: Rng>(
         PlayStylePhase::Defense,
         false,
     ) * role_attribute_modifier(defender.role, PlayStylePhase::Defense);
-    let att_eff = att_rating * att_mod * home_mod(att_side, ctx.config);
+    let att_eff = att_rating * att_mod * home_mod(att_side, ctx.config) * dribble_synergy(&attacker);
     let def_eff = def_rating
         * def_mod
         * home_mod(def_side, ctx.config)
@@ -296,11 +297,13 @@ fn resolve_shot<R: Rng>(ctx: &mut MatchContext, minute: u8, att_side: Side, rng:
     let shoot_rating =
         (shooter.shooting as f64 + shooter.composure as f64 + shooter.decisions as f64) / 3.0
             * trait_bonus(&shooter, TraitContext::Shooting)
+            * shot_synergy(&shooter)
             * att_cond;
     let gk_rating =
         (goalkeeper.handling as f64 + goalkeeper.reflexes as f64 + goalkeeper.positioning as f64)
             / 3.0
             * trait_bonus(&goalkeeper, TraitContext::Goalkeeping)
+            * gk_synergy(&goalkeeper)
             * def_cond;
 
     let accuracy =
