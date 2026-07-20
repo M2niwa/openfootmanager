@@ -277,12 +277,12 @@ fn resolve_shot<R: Rng>(ctx: &mut MatchContext, minute: u8, att_side: Side, rng:
         if rng.random_range(0.0..1.0f64) < ctx.config.penalty_probability {
             ctx.emit(MatchEvent::new(minute, EventType::PenaltyAwarded, att_side, zone));
             fouls::resolve_penalty(ctx, minute, att_side, rng);
-            fouls::maybe_card(ctx, minute, def_side, &fouler.id, zone, rng);
+            fouls::maybe_card(ctx, minute, def_side, &fouler, zone, rng);
             ctx.ball_zone = Zone::Midfield;
             ctx.possession = def_side;
             return;
         }
-        fouls::maybe_card(ctx, minute, def_side, &fouler.id, zone, rng);
+        fouls::maybe_card(ctx, minute, def_side, &fouler, zone, rng);
         // Foul but no penalty: advantage played, shot continues
     }
 

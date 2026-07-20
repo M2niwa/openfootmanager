@@ -395,8 +395,43 @@ pub(crate) fn tactics_break_speed_counter(tactics: &TacticsConfig) -> f64 {
 }
 
 // ---------------------------------------------------------------------------
-// Home advantage modifier
+// Attribute synergy — compound effects from attribute combinations
 // ---------------------------------------------------------------------------
+
+/// Foul synergy: high aggression + low composure = reckless challenges.
+/// Returns a multiplier applied to foul probability.
+///   - aggression ≥ 80 && composure ≤ 40 ⇒ ×1.30 (hot-head)
+///   - aggression ≥ 60 && composure ≤ 60 ⇒ ×1.12 (rash)
+///   - composure ≥ 80 && aggression ≤ 50  ⇒ ×0.85 (disciplined)
+///   - otherwise ⇒ ×1.0
+pub(crate) fn foul_synergy(snap: &PlayerSnap) -> f64 {
+    let agg = snap.aggression;
+    let comp = snap.composure;
+
+    if agg >= 80 && comp <= 40 {
+        1.30
+    } else if agg >= 60 && comp <= 60 {
+        1.12
+    } else if comp >= 80 && agg <= 50 {
+        0.85
+    } else {
+        1.0
+    }
+}
+
+/// Card synergy: low composure makes fouls more likely to draw cards.
+/// Returns a multiplier applied to yellow/red card probability.
+///   - composure ≤ 30 ⇒ ×1.20 (loses head easily)
+///   - composure ≥ 80 ⇒ ×0.88 (stays cool with referee)
+pub(crate) fn card_synergy(snap: &PlayerSnap) -> f64 {
+    if snap.composure <= 30 {
+        1.20
+    } else if snap.composure >= 80 {
+        0.88
+    } else {
+        1.0
+    }
+}
 
 pub(crate) fn home_mod(side: Side, config: &MatchConfig) -> f64 {
     match side {
@@ -522,6 +557,61 @@ mod phase_modifier_tests {
         config.home_advantage = 1.08;
         assert!((home_mod(Side::Home, &config) - 1.08).abs() < 0.001);
         assert_eq!(home_mod(Side::Away, &config), 1.0);
+    }
+
+    // --- foul_synergy tests ---
+
+    #[test]
+    fn foul_synergy_hothead() {
+        let s = snap(&[]);
+        // snap has 50 aggression, 50 composure → neutral
+        assert_eq!(foul_synergy(&s), 1.0);
+    }
+
+    #[test]
+    fn foul_synergy_disciplined() {
+        let mut s = snap(&[]);
+        s.aggression = 40;
+        s.composure = 85;
+        assert!((foul_synergy(&s) - 0.85).abs() < 0.001);
+    }
+
+    #[test]
+    fn foul_synergy_rash() {
+        let mut s = snap(&[]);
+        s.aggression = 70;
+        s.composure = 50;
+        assert!((foul_synergy(&s) - 1.12).abs() < 0.001);
+    }
+
+    #[test]
+    fn foul_synergy_borderline_not_triggered() {
+        let mut s = snap(&[]);
+        s.aggression = 79; // just below 80 threshold
+        s.composure = 41;  // just above 40 threshold
+        assert_eq!(foul_synergy(&s), 1.0);
+    }
+
+    // --- card_synergy tests ---
+
+    #[test]
+    fn card_synergy_loses_head() {
+        let mut s = snap(&[]);
+        s.composure = 25;
+        assert!((card_synergy(&s) - 1.20).abs() < 0.001);
+    }
+
+    #[test]
+    fn card_synergy_cool_with_ref() {
+        let mut s = snap(&[]);
+        s.composure = 85;
+        assert!((card_synergy(&s) - 0.88).abs() < 0.001);
+    }
+
+    #[test]
+    fn card_synergy_neutral() {
+        let s = snap(&[]);
+        assert_eq!(card_synergy(&s), 1.0);
     }
 
     // --- original tests below ---

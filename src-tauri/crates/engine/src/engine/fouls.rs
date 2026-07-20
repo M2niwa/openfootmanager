@@ -1,7 +1,7 @@
 use rand::{Rng, RngExt};
 
 use crate::event::{EventType, MatchEvent};
-use crate::shared::{PlayerSnap, TraitContext, trait_bonus};
+use crate::shared::{PlayerSnap, TraitContext, foul_synergy, card_synergy, trait_bonus};
 use crate::types::{Position, Side, Zone};
 
 use super::MatchContext;
@@ -25,6 +25,7 @@ pub(super) fn maybe_foul<R: Rng>(
     let foul_chance = ctx.config.foul_probability
         * (0.6 + aggression_mod * 0.8)
         * trait_bonus(fouler_snap, TraitContext::Foul)
+        * foul_synergy(fouler_snap)
         * tactics_mod;
     if rng.random_range(0.0..1.0f64) >= foul_chance {
         return false;
@@ -50,7 +51,7 @@ pub(super) fn maybe_foul<R: Rng>(
         ctx.emit(MatchEvent::new(minute, EventType::FreeKick, att_side, zone));
     }
 
-    maybe_card(ctx, minute, fouling_side, &fouler_snap.id, zone, rng);
+    maybe_card(ctx, minute, fouling_side, fouler_snap, zone, rng);
 
     if rng.random_range(0.0..1.0f64) < ctx.config.injury_probability {
         ctx.emit(
@@ -65,38 +66,33 @@ pub(super) fn maybe_card<R: Rng>(
     ctx: &mut MatchContext,
     minute: u8,
     side: Side,
-    fouler_id: &str,
+    fouler_snap: &PlayerSnap,
     zone: Zone,
     rng: &mut R,
 ) {
-    let aggression_factor = ctx
-        .team(side)
-        .players
-        .iter()
-        .find(|p| p.id == fouler_id)
-        .map(|p| p.aggression as f64 / 100.0)
-        .unwrap_or(0.5);
-    let card_chance = ctx.config.yellow_card_probability * (0.5 + aggression_factor);
+    let card_chance = ctx.config.yellow_card_probability
+        * (0.5 + fouler_snap.aggression as f64 / 100.0)
+        * card_synergy(fouler_snap);
     if rng.random_range(0.0..1.0f64) >= card_chance {
         return;
     }
 
     if rng.random_range(0.0..1.0f64) < ctx.config.red_card_probability {
-        ctx.emit(MatchEvent::new(minute, EventType::RedCard, side, zone).with_player(fouler_id));
-        ctx.sent_off.insert(fouler_id.to_string());
+        ctx.emit(MatchEvent::new(minute, EventType::RedCard, side, zone).with_player(&fouler_snap.id));
+        ctx.sent_off.insert(fouler_snap.id.clone());
         return;
     }
 
-    let current_yellows = ctx.yellows.entry(fouler_id.to_string()).or_insert(0);
+    let current_yellows = ctx.yellows.entry(fouler_snap.id.clone()).or_insert(0);
     *current_yellows += 1;
 
     if *current_yellows >= 2 {
         ctx.emit(
-            MatchEvent::new(minute, EventType::SecondYellow, side, zone).with_player(fouler_id),
+            MatchEvent::new(minute, EventType::SecondYellow, side, zone).with_player(&fouler_snap.id),
         );
-        ctx.sent_off.insert(fouler_id.to_string());
+        ctx.sent_off.insert(fouler_snap.id.clone());
     } else {
-        ctx.emit(MatchEvent::new(minute, EventType::YellowCard, side, zone).with_player(fouler_id));
+        ctx.emit(MatchEvent::new(minute, EventType::YellowCard, side, zone).with_player(&fouler_snap.id));
     }
 }
 
