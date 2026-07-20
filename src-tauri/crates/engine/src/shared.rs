@@ -415,6 +415,117 @@ mod phase_modifier_tests {
         c
     }
 
+    fn snap(traits: &[&str]) -> PlayerSnap {
+        PlayerSnap {
+            id: "test".into(),
+            pace: 50, stamina: 50, strength: 50, agility: 50,
+            passing: 50, shooting: 50, tackling: 50, dribbling: 50,
+            defending: 50, positioning: 50, vision: 50, decisions: 50,
+            composure: 50, aggression: 50, teamwork: 50, leadership: 50,
+            handling: 50, reflexes: 50, aerial: 50,
+            traits: traits.iter().map(|s| s.to_string()).collect(),
+            role: PlayerRole::Midfielder,
+        }
+    }
+
+    // --- trait_bonus tests ---
+
+    #[test]
+    fn trait_bonus_no_traits_returns_one() {
+        let s = snap(&[]);
+        assert_eq!(trait_bonus(&s, TraitContext::Shooting), 1.0);
+        assert_eq!(trait_bonus(&s, TraitContext::Dribbling), 1.0);
+        assert_eq!(trait_bonus(&s, TraitContext::Passing), 1.0);
+        assert_eq!(trait_bonus(&s, TraitContext::Tackling), 1.0);
+        assert_eq!(trait_bonus(&s, TraitContext::Foul), 1.0);
+    }
+
+    #[test]
+    fn trait_bonus_sharpshooter_boosts_shooting() {
+        let s = snap(&["Sharpshooter"]);
+        assert!((trait_bonus(&s, TraitContext::Shooting) - 1.08).abs() < 0.001);
+        assert_eq!(trait_bonus(&s, TraitContext::Dribbling), 1.0);
+    }
+
+    #[test]
+    fn trait_bonus_hothead_increases_foul_chance() {
+        let s = snap(&["HotHead"]);
+        assert!((trait_bonus(&s, TraitContext::Foul) - 1.25).abs() < 0.001);
+    }
+
+    #[test]
+    fn trait_bonus_coolhead_reduces_foul_chance() {
+        let s = snap(&["CoolHead"]);
+        assert!((trait_bonus(&s, TraitContext::Foul) - 0.70).abs() < 0.001);
+    }
+
+    #[test]
+    fn trait_bonus_multiple_traits_stack() {
+        let s = snap(&["Sharpshooter", "CoolHead", "CompleteForward"]);
+        let expected = 1.08 * 1.04 * 1.05;
+        assert!((trait_bonus(&s, TraitContext::Shooting) - expected).abs() < 0.001);
+    }
+
+    // --- play_style_modifier tests ---
+
+    #[test]
+    fn play_style_neutral_when_not_own_phase() {
+        assert_eq!(play_style_modifier(PlayStyle::Attacking, PlayStylePhase::Attack, false), 1.0);
+        assert_eq!(play_style_modifier(PlayStyle::Defensive, PlayStylePhase::Defense, false), 1.0);
+        assert_eq!(play_style_modifier(PlayStyle::Counter, PlayStylePhase::Attack, false), 1.0);
+        assert_eq!(play_style_modifier(PlayStyle::HighPress, PlayStylePhase::Press, false), 1.0);
+    }
+
+    #[test]
+    fn play_style_attacking_boosts_attack_weakens_defense() {
+        assert!((play_style_modifier(PlayStyle::Attacking, PlayStylePhase::Attack, true) - 1.12).abs() < 0.001);
+        assert!((play_style_modifier(PlayStyle::Attacking, PlayStylePhase::Defense, true) - 0.93).abs() < 0.001);
+    }
+
+    #[test]
+    fn play_style_counter_bonus_applies_in_attack_phase() {
+        assert!((play_style_modifier(PlayStyle::Counter, PlayStylePhase::Attack, true) - 1.18).abs() < 0.001);
+        assert!((play_style_modifier(PlayStyle::Counter, PlayStylePhase::Midfield, true) - 0.92).abs() < 0.001);
+    }
+
+    #[test]
+    fn play_style_default_is_neutral() {
+        assert_eq!(play_style_modifier(PlayStyle::Neutral, PlayStylePhase::Attack, true), 1.0);
+        assert_eq!(play_style_modifier(PlayStyle::Neutral, PlayStylePhase::Defense, true), 1.0);
+        assert_eq!(play_style_modifier(PlayStyle::Neutral, PlayStylePhase::Midfield, true), 1.0);
+    }
+
+    // --- role_attribute_modifier tests ---
+
+    #[test]
+    fn role_modifier_poacher_strong_attack_weak_defense() {
+        assert!((role_attribute_modifier(PlayerRole::Poacher, PlayStylePhase::Attack) - 1.12).abs() < 0.001);
+        assert!((role_attribute_modifier(PlayerRole::Poacher, PlayStylePhase::Defense) - 0.85).abs() < 0.001);
+    }
+
+    #[test]
+    fn role_modifier_pressing_forward_excels_in_press_phase() {
+        assert!((role_attribute_modifier(PlayerRole::PressingForward, PlayStylePhase::Press) - 1.15).abs() < 0.001);
+    }
+
+    #[test]
+    fn role_modifier_unknown_role_returns_neutral() {
+        assert_eq!(role_attribute_modifier(PlayerRole::Midfielder, PlayStylePhase::Attack), 1.0);
+        assert_eq!(role_attribute_modifier(PlayerRole::Midfielder, PlayStylePhase::Press), 1.0);
+    }
+
+    // --- home_mod tests ---
+
+    #[test]
+    fn home_mod_applies_advantage_to_home() {
+        let mut config = MatchConfig::default();
+        config.home_advantage = 1.08;
+        assert!((home_mod(Side::Home, &config) - 1.08).abs() < 0.001);
+        assert_eq!(home_mod(Side::Away, &config), 1.0);
+    }
+
+    // --- original tests below ---
+
     /// The load-bearing invariant: a default TacticsConfig must leave every new
     /// dial neutral (×1.0 for ratings, 0.0 for the probabilistic transitions),
     /// so default teams simulate byte-identically to the pre-dial engine.
